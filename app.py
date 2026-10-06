@@ -10,20 +10,33 @@ st.set_page_config(
 )
 
 
-# 구글시트에 저장하기
-# github에 올리기
-
-
 
 
 # ========================================================================================= 구글시트 연결
 # 1. 서비스 계정 JSON 열쇠로 구글 시트 안전하게 연결
 @st.cache_resource
 def get_connection():
-  gc = gspread.service_account(filename="service_account.json")
-  spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-  doc = gc.open_by_url(spreadsheet_url)
-  return doc
+    spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    
+    # 만약 Streamlit Secrets에 [gspread] 정보가 있다면 (클라우드 환경)
+    if "gspread" in st.secrets:
+        import json
+        from google.oauth2.service_account import Credentials
+        
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        # st.secrets에 있는 정보를 dict 형태로 변환해서 인증 객체 생성
+        creds_dict = dict(st.secrets["gspread"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+        gc = gspread.authorize(creds)
+    else:
+        # 로컬 환경 (컴퓨터에 service_account.json 파일이 있을 때)
+        gc = gspread.service_account(filename="service_account.json")
+        
+    doc = gc.open_by_url(spreadsheet_url)
+    return doc
 
 if 'gs' not in st.session_state:
     st.session_state.gs = {}
@@ -37,6 +50,7 @@ if 'gs' not in st.session_state:
     # --- [2] 산행기록 탭 읽기 및 저장(쓰기) ---
     hiking_ws = doc.worksheet("hiking")
     st.session_state.gs['Hiking'] = pd.DataFrame(hiking_ws.get_all_records()).reset_index(drop=True)
+
 Member = st.session_state.gs['Member']
 Hiking = st.session_state.gs['Hiking']
 # st.dataframe(Member, width="stretch")
